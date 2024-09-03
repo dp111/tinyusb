@@ -38,7 +38,7 @@
 #define USB_PID           (0x4000 | _PID_MAP(CDC, 0) | _PID_MAP(MSC, 1) | _PID_MAP(HID, 2) | \
                            _PID_MAP(MIDI, 3) | _PID_MAP(VENDOR, 4) )
 
-#define USB_VID   0xcafe
+#define USB_VID   0xCafe
 #define USB_BCD   0x0200
 
 //--------------------------------------------------------------------+
@@ -48,8 +48,8 @@ tusb_desc_device_t const desc_device =
 {
     .bLength            = sizeof(tusb_desc_device_t),
     .bDescriptorType    = TUSB_DESC_DEVICE,
-    .bcdUSB             = USB_BCD,
-    .bDeviceClass       = TUSB_CLASS_UNSPECIFIED,
+    .bcdUSB             = 0x0200,
+    .bDeviceClass       = 0x00,
     .bDeviceSubClass    = 0x00,
     .bDeviceProtocol    = 0x00,
 
@@ -57,7 +57,7 @@ tusb_desc_device_t const desc_device =
 
     .idVendor           = USB_VID,
     .idProduct          = USB_PID,
-    .bcdDevice          = 0x0100,
+    .bcdDevice          = USB_BCD,
 
     .iManufacturer      = 0x01,
     .iProduct           = 0x02,
@@ -112,6 +112,17 @@ enum
 
 #define CONFIG_TOTAL_LEN    (TUD_CONFIG_DESC_LEN + TUD_USBTMC_DESC_LEN)
 
+#if CFG_TUSB_MCU == OPT_MCU_LPC175X_6X || CFG_TUSB_MCU == OPT_MCU_LPC177X_8X || CFG_TUSB_MCU == OPT_MCU_LPC40XX
+  // LPC 17xx and 40xx endpoint type (bulk/interrupt/iso) are fixed by its number
+  // 0 control, 1 In, 2 Bulk, 3 Iso, 4 In etc ...
+  // Note: since CDC EP ( 1 & 2), HID (4) are spot-on, thus we only need to force
+  // endpoint number for MSC to 5
+  #define EPNUM_MSC   0x05
+#else
+  #define EPNUM_MSC   0x03
+#endif
+
+
 uint8_t const desc_fs_configuration[] =
 {
   // Config number, interface count, string index, total length, attribute, power in mA
@@ -140,7 +151,7 @@ tusb_desc_device_qualifier_t const desc_device_qualifier =
   .bDescriptorType    = TUSB_DESC_DEVICE_QUALIFIER,
   .bcdUSB             = USB_BCD,
 
-  .bDeviceClass       = TUSB_CLASS_UNSPECIFIED,
+  .bDeviceClass       = 0x00,
   .bDeviceSubClass    = 0x00,
   .bDeviceProtocol    = 0x00,
 
