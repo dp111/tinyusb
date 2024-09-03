@@ -93,7 +93,6 @@ void board_init(void) {
   }
 
   MXC_SYS_ClockEnable(MXC_SYS_PERIPH_CLOCK_USB);
-  MXC_SYS_Reset_Periph(MXC_SYS_RESET_USB);
 }
 
 //--------------------------------------------------------------------+

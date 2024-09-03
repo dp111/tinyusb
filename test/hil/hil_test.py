@@ -27,7 +27,6 @@
 
 import argparse
 import os
-import re
 import sys
 import time
 import serial
@@ -39,9 +38,6 @@ import fs
 
 ENUM_TIMEOUT = 30
 
-STATUS_OK = "\033[32mOK\033[0m"
-STATUS_FAILED = "\033[31mFailed\033[0m"
-STATUS_SKIPPED = "\033[33mSkipped\033[0m"
 
 # get usb serial by id
 def get_serial_dev(id, vendor_str, product_str, ifnum):
@@ -216,39 +212,14 @@ def flash_uniflash(board, firmware):
 
 
 # -------------------------------------------------------------
-# Tests: dual
+# Tests
 # -------------------------------------------------------------
-
-def test_dual_host_info_to_device_cdc(board):
-    uid = board['uid']
-    declared_devs = [f'{d["vid_pid"]}_{d["serial"]}' for d in board['tests']['dual_attached']]
-
-    port = get_serial_dev(uid, 'TinyUSB', "TinyUSB_Device", 0)
-    ser = open_serial_dev(port)
-    # read from cdc, first line should contain vid/pid and serial
-    data = ser.read(1000)
-    lines = data.decode('utf-8').splitlines()
-    enum_dev_sn = []
-    for l in lines:
-        vid_pid_sn = re.search(r'ID ([0-9a-fA-F]+):([0-9a-fA-F]+) SN (\w+)', l)
-        if vid_pid_sn:
-            print(f'\r\n  {l} ', end='')
-            enum_dev_sn.append(f'{vid_pid_sn.group(1)}_{vid_pid_sn.group(2)}_{vid_pid_sn.group(3)}')
-
-    assert(set(declared_devs) == set(enum_dev_sn)), \
-        f'Enumerated devices {enum_dev_sn} not match with declared {declared_devs}'
-    return 0
-
-
-# -------------------------------------------------------------
-# Tests: device
-# -------------------------------------------------------------
-def test_device_board_test(board):
+def test_board_test(board):
     # Dummy test
     pass
 
 
-def test_device_cdc_dual_ports(board):
+def test_cdc_dual_ports(board):
     uid = board['uid']
     port1 = get_serial_dev(uid, 'TinyUSB', "TinyUSB_Device", 0)
     port2 = get_serial_dev(uid, 'TinyUSB', "TinyUSB_Device", 2)
@@ -270,7 +241,7 @@ def test_device_cdc_dual_ports(board):
     assert ser2.read(100) == str2.upper(), 'Port2 wrong data'
 
 
-def test_device_cdc_msc(board):
+def test_cdc_msc(board):
     uid = board['uid']
     # Echo test
     port = get_serial_dev(uid, 'TinyUSB', "TinyUSB_Device", 0)
@@ -291,11 +262,11 @@ issue at github.com/hathach/tinyusb"
     assert data == readme, 'MSC wrong data'
 
 
-def test_device_cdc_msc_freertos(board):
-    test_device_cdc_msc(board)
+def test_cdc_msc_freertos(board):
+    test_cdc_msc(board)
 
 
-def test_device_dfu(board):
+def test_dfu(board):
     uid = board['uid']
 
     # Wait device enum
@@ -337,7 +308,7 @@ def test_device_dfu(board):
     os.remove(f_dfu1)
 
 
-def test_device_dfu_runtime(board):
+def test_dfu_runtime(board):
     uid = board['uid']
 
     # Wait device enum
@@ -354,7 +325,7 @@ def test_device_dfu_runtime(board):
     assert timeout, 'Device not available'
 
 
-def test_device_hid_boot_interface(board):
+def test_hid_boot_interface(board):
     uid = board['uid']
     kbd = get_hid_dev(uid, 'TinyUSB', 'TinyUSB_Device', 'event-kbd')
     mouse1 = get_hid_dev(uid, 'TinyUSB', 'TinyUSB_Device', 'if01-event-mouse')
@@ -370,7 +341,7 @@ def test_device_hid_boot_interface(board):
     assert timeout, 'HID device not available'
 
 
-def test_device_hid_composite_freertos(id):
+def test_hid_composite_freertos(id):
     # TODO implement later
     pass
 
@@ -380,15 +351,13 @@ def test_device_hid_composite_freertos(id):
 # -------------------------------------------------------------
 # all possible tests: board_test is added last to disable board's usb
 all_tests = [
-    'device/cdc_dual_ports',
-    'device/cdc_msc',
-    'device/dfu',
-    'device/cdc_msc_freertos',  # don't test 2 cdc_msc next to each other
-    'device/dfu_runtime',
-    'device/hid_boot_interface',
-
-    'dual/host_info_to_device_cdc',
-    'device/board_test'
+    'cdc_dual_ports',
+    'cdc_msc',
+    'dfu',
+    'cdc_msc_freertos',  # dont test 2 cdc_msc next to each other, since they have same vid/pid. Can be confused by host
+    'dfu_runtime',
+    'hid_boot_interface',
+    'board_test'
 ]
 
 
@@ -397,24 +366,24 @@ def test_board(board):
     flasher = board['flasher'].lower()
 
     # default to all tests
-    test_list = list(all_tests)
-
     if 'tests' in board:
-        board_tests = board['tests']
-        if 'only' in board_tests:
-            test_list = board_tests['only'] + ['device/board_test']
-        if 'skip' in board_tests:
-            for skip in board_tests['skip']:
-                if skip in test_list:
-                    test_list.remove(skip)
+        test_list = board['tests'] + ['board_test']
+    else:
+        test_list = list(all_tests)
+
+    # remove skip_tests
+    if 'tests_skip' in board:
+        for skip in board['tests_skip']:
+            if skip in test_list:
+                test_list.remove(skip)
 
     err_count = 0
     for test in test_list:
-        fw_dir = f'cmake-build/cmake-build-{name}/{test}'
+        fw_dir = f'cmake-build/cmake-build-{name}/device/{test}'
         if not os.path.exists(fw_dir):
-            fw_dir = f'examples/cmake-build-{name}/{test}'
-        fw_name = f'{fw_dir}/{os.path.basename(test)}'
-        print(f'{name:25} {test:30} ... ', end='')
+            fw_dir = f'examples/cmake-build-{name}/device/{test}'
+        fw_name = f'{fw_dir}/{test}'
+        print(f'{name:30} {test:20} ... ', end='')
 
         if not os.path.exists(fw_dir):
             print('Skip')
@@ -431,15 +400,16 @@ def test_board(board):
 
         if ret.returncode == 0:
             try:
-                ret = globals()[f'test_{test.replace("/", "_")}'](board)
+                ret = globals()[f'test_{test}'](board)
                 print('OK')
             except Exception as e:
                 err_count += 1
-                print(STATUS_FAILED)
+                print('Failed')
                 print(f'  {e}')
         else:
             err_count += 1
-            print(f'Flash {STATUS_FAILED}')
+            print('Flash failed')
+
     return err_count
 
 
@@ -466,13 +436,10 @@ def main():
     else:
         config_boards = [e for e in config['boards'] if e['name'] in boards]
 
+    err_count_list = []
     with Pool(processes=os.cpu_count()) as pool:
-        err_count = sum(pool.map(test_board, config_boards))
-
-    print()
-    print("-" * 30)
-    print(f'Total failed: {err_count}')
-    print("-" * 30)
+        err_count_list = pool.map(test_board, config_boards)
+    err_count = sum(err_count_list)
     sys.exit(err_count)
 
 
